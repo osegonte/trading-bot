@@ -1,14 +1,8 @@
-# Candlestick pattern detection + Trend bias
+# Candlestick pattern detection
 import pandas as pd
 
 def is_doji(candle, threshold=0.1):
-    """
-    Detect Doji pattern
-    Args:
-        candle: Series with Open, High, Low, Close
-        threshold: body to range ratio threshold
-    Returns: bool
-    """
+    """Detect Doji pattern"""
     body = abs(candle['Close'] - candle['Open'])
     range_size = candle['High'] - candle['Low']
     
@@ -18,12 +12,7 @@ def is_doji(candle, threshold=0.1):
     return (body / range_size) < threshold
 
 def is_hammer(candle):
-    """
-    Detect Hammer pattern (bullish)
-    Args:
-        candle: Series with Open, High, Low, Close
-    Returns: bool
-    """
+    """Detect Hammer pattern (bullish)"""
     body = abs(candle['Close'] - candle['Open'])
     lower_shadow = min(candle['Open'], candle['Close']) - candle['Low']
     upper_shadow = candle['High'] - max(candle['Open'], candle['Close'])
@@ -31,39 +20,20 @@ def is_hammer(candle):
     if body == 0:
         return False
     
-    # Hammer: small body, long lower shadow, small upper shadow
     return (lower_shadow > 2 * body) and (upper_shadow < body * 0.5)
 
 def is_bullish_engulfing(curr, prev):
-    """
-    Detect Bullish Engulfing pattern
-    Args:
-        curr: Current candle
-        prev: Previous candle
-    Returns: bool
-    """
-    # Previous candle is bearish
+    """Detect Bullish Engulfing pattern"""
     prev_bearish = prev['Close'] < prev['Open']
-    # Current candle is bullish
     curr_bullish = curr['Close'] > curr['Open']
-    # Current body engulfs previous body
     engulfs = (curr['Open'] < prev['Close']) and (curr['Close'] > prev['Open'])
     
     return prev_bearish and curr_bullish and engulfs
 
 def is_bearish_engulfing(curr, prev):
-    """
-    Detect Bearish Engulfing pattern
-    Args:
-        curr: Current candle
-        prev: Previous candle
-    Returns: bool
-    """
-    # Previous candle is bullish
+    """Detect Bearish Engulfing pattern"""
     prev_bullish = prev['Close'] > prev['Open']
-    # Current candle is bearish
     curr_bearish = curr['Close'] < curr['Open']
-    # Current body engulfs previous body
     engulfs = (curr['Open'] > prev['Close']) and (curr['Close'] < prev['Open'])
     
     return prev_bullish and curr_bearish and engulfs
@@ -71,8 +41,6 @@ def is_bearish_engulfing(curr, prev):
 def detect_candlestick_pattern(df):
     """
     Detect candlestick patterns in the latest candles
-    Args:
-        df: DataFrame with OHLC data
     Returns: tuple (pattern_name, verdict)
     """
     if len(df) < 2:
@@ -81,7 +49,6 @@ def detect_candlestick_pattern(df):
     curr = df.iloc[-1]
     prev = df.iloc[-2]
     
-    # Check patterns in order of priority
     if is_bullish_engulfing(curr, prev):
         return ("Bullish Engulfing", "BUY")
     
@@ -95,20 +62,3 @@ def detect_candlestick_pattern(df):
         return ("Doji", "NEUTRAL")
     
     return ("No Clear Pattern", "NEUTRAL")
-
-def aggregate_verdicts(verdicts):
-    """
-    Aggregate multiple module verdicts into final verdict
-    Args:
-        verdicts: dict of {module_name: verdict}
-    Returns: str - "BUY", "SELL", or "NEUTRAL"
-    """
-    buy_count = sum(1 for v in verdicts.values() if v == "BUY")
-    sell_count = sum(1 for v in verdicts.values() if v == "SELL")
-    
-    if buy_count > sell_count:
-        return "BUY"
-    elif sell_count > buy_count:
-        return "SELL"
-    else:
-        return "NEUTRAL"

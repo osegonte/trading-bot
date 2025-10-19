@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+*.log
+
+# Database
+*.db
+
+# Sensitive
+config.py
+.env
+
+# OS
+.DS_Store
+.vscode/
+*.swp
