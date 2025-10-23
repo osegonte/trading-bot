@@ -1,11 +1,18 @@
-# Trade verification from OHLC data
-import yfinance as yf
+"""
+PRODUCTION Trade verification with real-time monitoring
+Checks TP/SL hits immediately instead of waiting 2 hours
+"""
 from datetime import datetime, timedelta
-from config import VERIFICATION_WINDOW_BARS, SYMBOL_DEFAULT
+import pytz
+import logging
+from data_twelve import get_ohlc_data
+from config import VERIFICATION_WINDOW_BARS
 
-def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
+logger = logging.getLogger(__name__)
+
+def verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price):
     """
-    Verify trade outcome by checking which level hit first
+    Verify trade outcome by checking which level hit first (REAL-TIME)
     Args:
         entry_time: datetime of entry
         direction: "BUY" or "SELL"
@@ -16,25 +23,54 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
     """
     try:
         # Fetch OHLC from entry time forward
-        ticker = yf.Ticker(SYMBOL_DEFAULT)
+        now = datetime.now(pytz.UTC)
         
-        # Get data for verification window
-        start_time = entry_time
-        end_time = entry_time + timedelta(minutes=VERIFICATION_WINDOW_BARS)
+        # Check if trade is too old (expired after 2 hours)
+        time_since_entry = (now - entry_time).total_seconds() / 60  # minutes
         
-        data = ticker.history(start=start_time, end=end_time, interval="1m")
+        if time_since_entry > VERIFICATION_WINDOW_BARS:
+            logger.info(f"Trade expired ({time_since_entry:.0f} minutes > {VERIFICATION_WINDOW_BARS})")
+            return {
+                'result': 'EXPIRED',
+                'exit_price': None,
+                'bars': VERIFICATION_WINDOW_BARS,
+                'rr': 0
+            }
         
-        if data.empty:
-            return {'result': 'EXPIRED', 'exit_price': None, 'bars': 0, 'rr': 0}
+        # Fetch data from entry time to now
+        df = get_ohlc_data(period="5d", interval="1m", candles=200)
+        
+        if df is None or df.empty:
+            logger.warning("Could not fetch data for verification")
+            return {
+                'result': 'PENDING',
+                'exit_price': None,
+                'bars': 0,
+                'rr': 0
+            }
+        
+        # Filter data to only bars after entry time
+        entry_time_utc = entry_time.replace(tzinfo=pytz.UTC) if entry_time.tzinfo is None else entry_time
+        df_after_entry = df[df.index > entry_time_utc]
+        
+        if df_after_entry.empty:
+            logger.info("No data yet after entry time - trade still pending")
+            return {
+                'result': 'PENDING',
+                'exit_price': None,
+                'bars': 0,
+                'rr': 0
+            }
         
         # Check each candle
-        for i, (idx, candle) in enumerate(data.iterrows()):
+        for i, (idx, candle) in enumerate(df_after_entry.iterrows()):
             if direction == "BUY":
                 # Check if SL hit first (low <= sl)
                 if candle['Low'] <= sl_price:
                     # Check if same candle also hit TP
                     if candle['High'] >= tp_price:
                         # Same bar ambiguity - assume worst case (SL first)
+                        logger.info(f"BUY: Both levels hit in same bar - assuming SL")
                         return {
                             'result': 'LOSS',
                             'exit_price': sl_price,
@@ -42,6 +78,7 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                             'rr': -1.0
                         }
                     else:
+                        logger.info(f"BUY: SL hit at {sl_price} in {i+1} bars")
                         return {
                             'result': 'LOSS',
                             'exit_price': sl_price,
@@ -51,11 +88,12 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                 
                 # Check if TP hit (high >= tp)
                 if candle['High'] >= tp_price:
+                    logger.info(f"BUY: TP hit at {tp_price} in {i+1} bars")
                     return {
                         'result': 'WIN',
                         'exit_price': tp_price,
                         'bars': i + 1,
-                        'rr': 2.0  # Based on RR_TARGET
+                        'rr': 2.0
                     }
             
             else:  # SELL
@@ -63,6 +101,7 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                 if candle['High'] >= sl_price:
                     if candle['Low'] <= tp_price:
                         # Same bar ambiguity - worst case
+                        logger.info(f"SELL: Both levels hit in same bar - assuming SL")
                         return {
                             'result': 'LOSS',
                             'exit_price': sl_price,
@@ -70,6 +109,7 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                             'rr': -1.0
                         }
                     else:
+                        logger.info(f"SELL: SL hit at {sl_price} in {i+1} bars")
                         return {
                             'result': 'LOSS',
                             'exit_price': sl_price,
@@ -79,6 +119,7 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                 
                 # Check if TP hit (low <= tp)
                 if candle['Low'] <= tp_price:
+                    logger.info(f"SELL: TP hit at {tp_price} in {i+1} bars")
                     return {
                         'result': 'WIN',
                         'exit_price': tp_price,
@@ -86,9 +127,27 @@ def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
                         'rr': 2.0
                     }
         
-        # Neither hit within window
-        return {'result': 'EXPIRED', 'exit_price': None, 'bars': VERIFICATION_WINDOW_BARS, 'rr': 0}
+        # Neither hit yet - still pending
+        bars_elapsed = len(df_after_entry)
+        logger.info(f"Trade still pending ({bars_elapsed} bars elapsed)")
+        return {
+            'result': 'PENDING',
+            'exit_price': None,
+            'bars': bars_elapsed,
+            'rr': 0
+        }
     
     except Exception as e:
-        print(f"Verification error: {e}")
-        return {'result': 'ERROR', 'exit_price': None, 'bars': 0, 'rr': 0}
+        logger.error(f"Verification error: {e}", exc_info=True)
+        return {
+            'result': 'ERROR',
+            'exit_price': None,
+            'bars': 0,
+            'rr': 0
+        }
+
+
+# Keep old function for backward compatibility
+def verify_trade(entry_time, direction, entry_price, sl_price, tp_price):
+    """Legacy function - redirects to real-time version"""
+    return verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price)

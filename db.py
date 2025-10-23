@@ -1,6 +1,12 @@
-# SQLite logging for trade signals, trades, council, and levels
+"""
+PRODUCTION SQLite database with enhanced features:
+- Pause/resume control
+- Pending trades query
+- Bot start time tracking
+"""
 import sqlite3
 from datetime import datetime
+import pytz
 
 DB_PATH = "trading_signals.db"
 
@@ -9,7 +15,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Signals table (existing)
+    # Signals table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS signals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,12 +44,12 @@ def init_db():
         )
     ''')
     
-    # Trades table (extended for Phase 6)
+    # Trades table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
             signal_id INTEGER,
+            timestamp TEXT NOT NULL,
             direction TEXT NOT NULL,
             entry REAL NOT NULL,
             stop_loss REAL NOT NULL,
@@ -54,15 +60,30 @@ def init_db():
             rr REAL,
             risk_amount REAL,
             potential_gain REAL,
-            atr REAL,
             result TEXT,
             exit_price REAL,
             bars_to_hit INTEGER,
             pnl REAL,
-            notes TEXT,
             FOREIGN KEY (signal_id) REFERENCES signals (id)
         )
     ''')
+    
+    # Bot control table (NEW)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bot_control (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            paused INTEGER DEFAULT 0,
+            start_time TEXT,
+            last_activity TEXT
+        )
+    ''')
+    
+    # Initialize bot control if not exists
+    cursor.execute('''
+        INSERT OR IGNORE INTO bot_control (id, paused, start_time, last_activity)
+        VALUES (1, 0, ?, ?)
+    ''', (datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
+          datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")))
     
     conn.commit()
     conn.close()
@@ -111,14 +132,14 @@ def log_trade_plan(signal_id, plan):
     
     cursor.execute('''
         INSERT INTO trades (
-            timestamp, signal_id, direction, entry, stop_loss, take_profit,
-            lots, stop_pips, tp_pips, rr, risk_amount, potential_gain, atr
+            signal_id, timestamp, direction, entry, stop_loss, take_profit,
+            lots, stop_pips, tp_pips, rr, risk_amount, potential_gain
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, signal_id, plan['direction'], plan['entry'], 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (signal_id, timestamp, plan['direction'], plan['entry'], 
           plan['sl'], plan['tp'], plan['lots'], plan['stop_pips'],
           plan['tp_pips'], plan['rr'], plan['risk_amount'], 
-          plan['potential_gain'], plan['atr']))
+          plan['potential_gain']))
     
     trade_id = cursor.lastrowid
     conn.commit()
@@ -148,7 +169,8 @@ def get_last_trade():
     
     cursor.execute('''
         SELECT id, signal_id, timestamp, direction, entry, stop_loss, 
-               take_profit, lots, stop_pips, rr, result
+               take_profit, lots, stop_pips, tp_pips, rr, risk_amount,
+               potential_gain, result
         FROM trades
         ORDER BY id DESC
         LIMIT 1
@@ -176,6 +198,25 @@ def get_trade_by_id(trade_id):
     conn.close()
     
     return result
+
+def get_pending_trades():
+    """Get all pending trades (result IS NULL)"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, signal_id, timestamp, direction, entry, stop_loss, 
+               take_profit, lots, stop_pips, tp_pips, rr, risk_amount,
+               potential_gain
+        FROM trades
+        WHERE result IS NULL
+        ORDER BY id ASC
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return results
 
 def get_signal_verdicts(signal_id):
     """Get all module verdicts for a signal"""
@@ -242,11 +283,11 @@ def get_stats():
         cursor.execute('SELECT AVG(pnl) FROM trades WHERE result = "WIN"')
         avg_win = cursor.fetchone()[0] or 0
         
-        cursor.execute('SELECT AVG(pnl) FROM trades WHERE result = "LOSS"')
+        cursor.execute('SELECT AVG(ABS(pnl)) FROM trades WHERE result = "LOSS"')
         avg_loss = cursor.fetchone()[0] or 0
         
         if avg_loss != 0:
-            avg_rr = abs(avg_win / avg_loss)
+            avg_rr = round(abs(avg_win / avg_loss), 2)
     
     conn.close()
     
@@ -257,7 +298,61 @@ def get_stats():
         'macro_saves': macro_saves,
         'total_trades': total_trades,
         'win_rate': win_rate,
-        'avg_rr': round(avg_rr, 2)
+        'avg_rr': avg_rr
     }
 
+def is_bot_paused():
+    """Check if bot is paused"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT paused FROM bot_control WHERE id = 1')
+    result = cursor.fetchone()
+    conn.close()
+    
+    return bool(result[0]) if result else False
+
+def set_bot_paused(paused):
+    """Set bot pause state"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE bot_control 
+        SET paused = ?, last_activity = ?
+        WHERE id = 1
+    ''', (1 if paused else 0, datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")))
+    
+    conn.commit()
+    conn.close()
+
+def get_bot_start_time():
+    """Get bot start time"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT start_time FROM bot_control WHERE id = 1')
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0]:
+        return datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=pytz.UTC)
+    return None
+
+def update_bot_start_time():
+    """Update bot start time to now"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    now = datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    cursor.execute('''
+        UPDATE bot_control 
+        SET start_time = ?, last_activity = ?
+        WHERE id = 1
+    ''', (now, now))
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database on import
 init_db()
