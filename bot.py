@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from datetime import datetime
 
 from config import TELEGRAM_TOKEN, RISK_MODE
-from data import get_xauusd_price, get_ohlc_data, fetch_macro_data
+from data_twelve import get_xauusd_price, get_ohlc_data, fetch_macro_data
 from signals import (detect_candlestick_pattern, get_trend_verdict, get_sr_verdict, 
                      get_volume_verdict, get_rsi_verdict, get_macd_verdict, 
                      get_bollinger_verdict, get_macro_verdict, check_news_blackout)

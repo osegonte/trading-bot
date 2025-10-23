@@ -1,6 +1,6 @@
 # API keys and configuration
 TELEGRAM_TOKEN = "7623552805:AAHGKcE4k2vpUDyy0Im79xrZ1lrUHonbjAA"
-
+TWELVE_DATA_API_KEY = "4d84b9c11a8c4bceba24c5eecd21dd00"
 # Symbol configuration
 SYMBOL_DEFAULT = "GC=F"  # Gold Futures
 CANDLE_TIMEFRAME = "1m"
