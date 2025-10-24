@@ -98,25 +98,15 @@ async def send_telegram_message(message):
 
 def is_market_open():
     """Check if gold futures market is open"""
+    # SIMPLIFIED: Gold trades nearly 24/7, just avoid weekends
     now = datetime.now(pytz.UTC)
     
     # Saturday is closed
     if now.weekday() == 5:
         return False
     
-    # Sunday opens at 18:00 UTC
-    if now.weekday() == 6 and now.hour >= 18:
-        return True
-    
-    # Monday-Friday (near 24h, but we add quiet periods)
-    if now.weekday() < 5:
-        # Avoid low liquidity hours (20:00-23:00 UTC)
-        if 20 <= now.hour < 23:
-            return False
-        return True
-    
-    return False
-
+    # Otherwise, always open (24/5 trading)
+    return True
 
 def reset_daily_counters():
     """Reset counters at start of new trading day"""
