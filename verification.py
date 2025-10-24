@@ -25,8 +25,14 @@ def verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price
         # Fetch OHLC from entry time forward
         now = datetime.now(pytz.UTC)
         
+        # Ensure entry_time is timezone-aware
+        if entry_time.tzinfo is None:
+            entry_time_utc = pytz.UTC.localize(entry_time)
+        else:
+            entry_time_utc = entry_time
+        
         # Check if trade is too old (expired after 2 hours)
-        time_since_entry = (now - entry_time).total_seconds() / 60  # minutes
+        time_since_entry = (now - entry_time_utc).total_seconds() / 60  # minutes
         
         if time_since_entry > VERIFICATION_WINDOW_BARS:
             logger.info(f"Trade expired ({time_since_entry:.0f} minutes > {VERIFICATION_WINDOW_BARS})")
@@ -50,7 +56,6 @@ def verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price
             }
         
         # Filter data to only bars after entry time
-        entry_time_utc = entry_time.replace(tzinfo=pytz.UTC) if entry_time.tzinfo is None else entry_time
         df_after_entry = df[df.index > entry_time_utc]
         
         if df_after_entry.empty:
