@@ -150,8 +150,15 @@ def get_ohlc_data(period="5d", interval="1min", candles=100):
             df = df.set_index('datetime')
             df = df.sort_index()
             
-            for col in ['open', 'high', 'low', 'close', 'volume']:
+            # Handle OHLC columns (volume may not be present)
+            for col in ['open', 'high', 'low', 'close']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Volume is optional for XAU/USD
+            if 'volume' in df.columns:
+                df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+            else:
+                df['volume'] = 0  # No volume data for spot gold
             
             df = df.rename(columns={
                 'open': 'Open',
