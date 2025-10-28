@@ -56,6 +56,9 @@ def verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price
             }
         
         # Filter data to only bars after entry time
+        # Ensure DataFrame index is timezone-aware for comparison
+        if df.index.tz is None:
+            df.index = df.index.tz_localize('UTC')
         df_after_entry = df[df.index > entry_time_utc]
         
         if df_after_entry.empty:
