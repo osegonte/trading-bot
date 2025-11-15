@@ -1,6 +1,6 @@
 """
 PRODUCTION Trade verification with real-time monitoring
-Checks TP/SL hits immediately instead of waiting 2 hours
+FIXED: Proper timezone handling for pandas DataFrame comparison
 """
 from datetime import datetime, timedelta
 import pytz
@@ -55,10 +55,16 @@ def verify_trade_realtime(entry_time, direction, entry_price, sl_price, tp_price
                 'rr': 0
             }
         
-        # Filter data to only bars after entry time
-        # Ensure DataFrame index is timezone-aware for comparison
+        # CRITICAL FIX: Ensure DataFrame index is timezone-aware for comparison
+        # This prevents the "Invalid comparison between dtype=datetime64[ns] and datetime" error
         if df.index.tz is None:
+            # DataFrame has naive timestamps - make them UTC-aware
             df.index = df.index.tz_localize('UTC')
+        elif str(df.index.tz) != 'UTC':
+            # DataFrame has different timezone - convert to UTC
+            df.index = df.index.tz_convert('UTC')
+        
+        # Now both are timezone-aware UTC - comparison will work
         df_after_entry = df[df.index > entry_time_utc]
         
         if df_after_entry.empty:
