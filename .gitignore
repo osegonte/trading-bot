@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+
+# Logs
+*.log
+logs/*.log
+auto.log
+
+# Database
+*.db
+*.db-journal
+
+# Sensitive files
+config.py
+.env
+*.key
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backups
+*.backup
+*.bak
+backups/
+
+# Test files
+.pytest_cache/
+.coverage
+htmlcov/config/ctrader_config.py
+
+# Environment variables
+.env
+.env

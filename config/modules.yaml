@@ -1,0 +1,85 @@
+# Module Configuration
+# ONLY WORKING MODULES - Clean and focused
+
+version: "1.0"
+
+# ===== TECHNICAL ANALYSIS MODULES =====
+technical:
+  rsi:
+    enabled: true
+    weight: 0.5
+    period: 14
+    oversold: 30
+    overbought: 70
+    description: "Relative Strength Index - momentum oscillator"
+  
+  macd:
+    enabled: true
+    weight: 0.5
+    fast: 12
+    slow: 26
+    signal: 9
+    description: "Moving Average Convergence Divergence"
+  
+  bollinger:
+    enabled: true
+    weight: 0.5
+    period: 20
+    std_dev: 2
+    description: "Bollinger Bands - volatility indicator"
+  
+  trend:
+    enabled: true
+    weight: 1.0
+    ema_fast: 20
+    ema_slow: 50
+    description: "Trend following using EMAs"
+  
+  volume:
+    enabled: true
+    weight: 1.0
+    period: 20
+    strong_threshold: 1.2
+    weak_threshold: 0.7
+    description: "Volume confirmation"
+  
+  support_resistance:
+    enabled: true
+    weight: 1.0
+    swing_window: 5
+    proximity_threshold: 0.005
+    num_levels: 3
+    description: "Support/Resistance levels"
+  
+  candlestick:
+    enabled: true
+    weight: 1.0
+    doji_threshold: 0.1
+    hammer_ratio: 2.0
+    description: "Candlestick pattern recognition"
+
+# ===== FUNDAMENTAL ANALYSIS MODULES =====
+fundamental:
+  macro:
+    enabled: true
+    weight: 1.0
+    lookback_minutes: 15
+    cache_seconds: 60
+    description: "Macro sentiment (DXY, Yields, Risk)"
+
+# ===== SIGNAL AGGREGATION =====
+aggregation:
+  buy_threshold: 2.0
+  sell_threshold: -2.0
+  confidence_base: 50
+  confidence_full_weight: 10
+  confidence_half_weight: 5
+  confidence_macro_align: 10
+  confidence_macro_contra: -10
+  confidence_cap: 90
+
+# ===== TRADING RULES =====
+trading:
+  min_confidence: 40
+  max_signals_per_hour: 5
+  cooldown_after_loss: 2
